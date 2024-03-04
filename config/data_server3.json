@@ -1,0 +1,7 @@
+{
+  "ip": "127.0.0.1",
+  "port": 9003,
+  "ENDPOINT": "127.0.0.1:9003",
+  "rabbitMQAddr": "amqp://osstest:osstest@192.168.52.140:5672",
+  "basedir": "E:\\Code\\go\\src\\DisHub\\store\\test\\objects\\data\\3"
+}
