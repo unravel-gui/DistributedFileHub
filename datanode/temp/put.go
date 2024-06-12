@@ -34,6 +34,8 @@ func put(c *gin.Context) {
 	actual := info.Size()
 	os.Remove(infoFile)
 	e = f.Close()
+	//
+	log.Println("finish size = ", actual)
 	if actual != tempinfo.Size {
 		os.Remove(datFile)
 		log.Println("actual size mismatch, expect", tempinfo.Size, "actual", actual)

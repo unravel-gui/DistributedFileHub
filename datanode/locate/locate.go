@@ -3,26 +3,32 @@ package locate
 import (
 	"DisHub/common"
 	"DisHub/common/rabbitmq"
+	"DisHub/common/types"
 	"DisHub/config"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
 var objects = make(map[string]int)
 var mutex sync.Mutex
 
-func Locate(hash string) bool {
+func Locate(hash string) int {
 	mutex.Lock()
-	_, ok := objects[hash]
+	id, ok := objects[hash]
 	mutex.Unlock()
-	return ok
+	if !ok {
+		return -1
+	}
+	return id
 }
 
-func Add(hash string) {
+func Add(hash string, id int) {
 	mutex.Lock()
-	objects[hash] = 1
+	objects[hash] = id
 	mutex.Unlock()
 }
 
@@ -42,10 +48,13 @@ func StartLocate() {
 		if e != nil {
 			fmt.Println("locate err", e)
 		}
-		exist := Locate(hash)
-		fmt.Println("locate hash res:%v", exist)
-		if exist {
-			q.Send(msg.ReplyTo, config.GetLocalAddr())
+		id := Locate(hash)
+		log.Println(id)
+		if id != -1 {
+			q.Send(msg.ReplyTo, types.LocateMessage{
+				Addr: config.GetLocalAddr(),
+				Id:   id,
+			})
 		}
 	}
 }
@@ -53,7 +62,16 @@ func StartLocate() {
 func CollectObjects() {
 	files, _ := filepath.Glob(config.GetBasePath() + "/objects/*")
 	for i := range files {
-		hash := filepath.Base(files[i])
-		objects[hash] = 1
+		file := strings.Split(filepath.Base(files[i]), ".")
+		if len(file) != 3 {
+			fmt.Println("collected filename=", file)
+			continue
+		}
+		hash := file[0]
+		id, e := strconv.Atoi(file[1])
+		if e != nil {
+			fmt.Println("collect objects err:", e)
+		}
+		objects[hash] = id
 	}
 }

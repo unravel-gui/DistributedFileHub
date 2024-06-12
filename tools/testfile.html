@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload and Download Demo</title>
+</head>
+<body>
+    <h2>File Upload and Download Demo</h2>
+
+    <!-- Login Form -->
+    <h3>Login</h3>
+    <form id="loginForm">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username"><br><br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password"><br><br>
+        <button type="submit">Login</button>
+    </form>
+	<!-- Calc File Hash -->
+    <h3>Calc File Hash</h3>
+    <form id="hashForm">
+        <input type="file" id="fileInput" name="fileInput"><br><br>
+        <button type="submit">Calc</button>
+    </form>
+	<div id="hashResult"></div>
+    <!-- File Upload Form -->
+    <h3>Upload File</h3>
+    <form id="uploadForm">
+        <button type="submit">Upload</button>
+    </form>
+
+    <!-- File Download Form -->
+    <h3>Download File</h3>
+    <form id="downloadForm">
+        <label for="fileHash">File Hash:</label>
+        <input type="text" id="fileHash" name="fileHash"><br><br>
+        <button type="submit">Download</button>
+    </form>
+
+    <!-- File Download Link -->
+    <h3>Downloaded File</h3>
+    <a id="downloadLink" href="#" download>Downloaded File</a>
+
+    <script>
+        // Login Functionality
+        document.getElementById("loginForm").addEventListener("submit", function(event) {
+			event.preventDefault();
+			const username = document.getElementById("username").value;
+			const password = document.getElementById("password").value;
+			const loginData = { username, password };
+
+			fetch("http://127.0.0.1:9000/user/login", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify(loginData),
+				mode: 'cors' // 设置 mode 为 'cors'
+			})
+			.then(response => {
+				if (!response.ok) {
+					throw new Error("Login failed");
+				}
+				const token = response.headers.get("Jwt_Token"); // 从响应头中获取 JWT token
+				localStorage.setItem("jwt_token", token);
+				console.log("Login successful. Token: ", token);
+				console.log("headers: ", response.headers.get("Content-Length"));
+				return response.json();
+			})
+			.then(data => {
+				// 处理其他响应数据
+				console.log(data)
+			})
+			.catch(error => {
+				console.error("Login error:", error);
+			});
+		});
+
+        // File Upload Functionality
+        document.getElementById("uploadForm").addEventListener("submit", async function(event) {
+			event.preventDefault();
+			const fileInput = document.getElementById("fileInput").files[0];
+			if (!fileInput) {
+				alert("Please select a file.");
+				return;
+			}
+
+			const token = localStorage.getItem("jwt_token");
+            if (!token) {
+                alert("Please login first.");
+                return;
+            }
+
+			const fileHash = await calculateFileHash(fileInput); // 计算文件哈希值
+			if (!fileHash) {
+				alert("Failed to calculate file hash.");
+				return;
+			}
+			
+            // 创建分块上传任务
+            const response = await fetch("http://127.0.0.1:9000/objects/", {
+                method: "POST",
+                headers: {
+                    "Jwt_Token": `${token}`,
+                    "Size": fileInput.size,
+                    "hash": fileHash
+                }
+            });
+
+            if (!response.ok) {
+                console.error("Failed to create upload task.");
+                return;
+            }
+
+			const tempPath = response.headers.get('location');
+			console.log(tempPath)
+			const blockSize = 64000; // 分块大小
+		
+
+			const totalBlocks = Math.ceil(fileInput.size / blockSize);
+
+			for (let i = 0; i < totalBlocks; i++) {
+				const start = i * blockSize;
+				const end = Math.min(start + blockSize, fileInput.size);
+
+				const blockData = fileInput.slice(start, end);
+				
+
+				// 发送分块上传请求
+				const response = await fetch("http://127.0.0.1:9000"+tempPath, {
+					method: "PUT",
+					headers: {
+						"Jwt_Token": `${token}`,
+						"Content-Range": `bytes=${start}-${end - 1}/${fileInput.size}`,
+						"hash": fileHash
+					},
+					body: blockData
+				});
+
+				if (!response.ok) {
+					console.error("Upload failed for block ", i);
+					alert("Error uploading file.");
+					return;
+				}
+			}
+
+			// 文件上传完成后调用文件元数据上传服务
+			const fileMeta = {
+				dir: 0,
+				size: fileInput.size,
+				hash: fileHash,
+				name: fileInput.name,
+				content_type: fileInput.type
+			};
+
+			fetch("http://127.0.0.1:9000/fileMeta/", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Jwt_Token": `${token}`
+				},
+				body: JSON.stringify(fileMeta)
+			})
+			.then(response => {
+				if (!response.ok) {
+					throw new Error("File metadata upload failed");
+				}
+				console.log("File metadata upload successful.");
+			})
+			.catch(error => {
+				console.error("File metadata upload error:", error);
+			});
+
+			console.log("Upload successful.");
+			alert("File uploaded successfully.");
+		});
+
+        // File Download Functionality
+        document.getElementById("downloadForm").addEventListener("submit", function(event) {
+			event.preventDefault();
+			const fileHash = document.getElementById("fileHash").value;
+			if (!fileHash) {
+				alert("Please enter file hash.");
+				return;
+			}
+
+			const token = localStorage.getItem("jwt_token");
+			if (!token) {
+				alert("Please login first.");
+				return;
+			}
+
+			// 请求文件元数据接口，获取文件名和大小等信息
+			fetch(`http://127.0.0.1:9000/fileMeta/hash/${fileHash}`, {
+				method: "GET",
+				headers: {
+					"Jwt_Token": `${token}`
+				}
+			})
+			.then(response => {
+				if (!response.ok) {
+					throw new Error("Failed to fetch file metadata");
+				}
+				return response.json();
+			})
+			.then(fileMetadata => {
+				const fileName = fileMetadata.name;
+				const fileSize = fileMetadata.size;
+
+				// 发送下载文件内容的请求，指定起始位置为0，即从头开始下载
+				fetch(`http://127.0.0.1:9000/objects/${fileHash}`, {
+					method: "GET",
+					headers: {
+						"Jwt_Token": `${token}`,
+						"Content-Range": "bytes=0-"  // 指定下载文件的起始位置
+					}
+				})
+				.then(response => {
+					if (!response.ok) {
+						throw new Error("Download failed");
+					}
+					return response.blob();
+				})
+				.then(blob => {
+					// 创建下载链接
+					const url = URL.createObjectURL(blob);
+
+					// 创建虚拟的<a>标签，并设置下载链接、文件名
+					const a = document.createElement("a");
+					a.href = url;
+					a.download = fileName;
+
+					// 将<a>标签添加到页面中，并模拟点击实现下载
+					document.body.appendChild(a);
+					a.click();
+
+					// 下载完成后移除<a>标签
+					document.body.removeChild(a);
+				})
+				.catch(error => {
+					console.error("Download error:", error);
+					alert("Error downloading file.");
+				});
+			})
+			.catch(error => {
+				console.error("Fetch file metadata error:", error);
+				alert("Error fetching file metadata.");
+			});
+		});
+		
+		
+		
+		async function calculateFileHash(file) {
+			return new Promise((resolve, reject) => {
+				const chunkSize = 1024 * 1024; // 1MB chunks
+				const fileSize = file.size;
+				const chunks = Math.ceil(fileSize / chunkSize);
+				const hashBuffer = new ArrayBuffer(32);
+				const hashArray = new Uint8Array(hashBuffer);
+
+				let currentChunk = 0;
+				const reader = new FileReader();
+
+				reader.onload = async function() {
+					const chunkHash = await crypto.subtle.digest("SHA-256", new Uint8Array(reader.result));
+					hashArray.set(new Uint8Array(chunkHash), currentChunk * 32);
+
+					currentChunk++;
+
+					if (currentChunk < chunks) {
+						loadNextChunk();
+					} else {
+						let hashString = btoa(String.fromCharCode.apply(null, hashArray));
+						// 移除 base64 URL 编码中的特殊字符
+						hashString = hashString.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+						// 补充末尾的等号
+						const padding = '='.repeat((4 - (hashString.length % 4)) % 4);
+						hashString += padding;
+						resolve(hashString);
+					}
+				};
+
+				reader.onerror = function() {
+					reject(reader.error);
+				};
+
+				function loadNextChunk() {
+					const start = currentChunk * chunkSize;
+					const end = Math.min(start + chunkSize, fileSize);
+					const chunk = file.slice(start, end);
+					reader.readAsArrayBuffer(chunk);
+				}
+
+				loadNextChunk();
+			});
+		}
+		
+		document.getElementById("hashForm").addEventListener("submit", async function(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("Please select a file.");
+                return;
+            }
+
+            try {
+                const fileHash = await calculateFileHash(fileInput);
+                document.getElementById("hashResult").innerText = "File Hash: " + fileHash;
+            } catch (error) {
+                console.error("Hash calculation error:", error);
+                alert("Error calculating file hash.");
+            }
+        });
+    </script>
+</body>
+</html>

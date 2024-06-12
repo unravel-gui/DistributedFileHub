@@ -18,6 +18,9 @@ type Config struct {
 	RABBITMQADDR string `json:"rabbitMQAddr"`
 	BASEDIR      string `json:"basedir"`
 	filePath     string
+	Weight       int `json:"weight"`
+	LBStrategy   int `json:"lbStrategy"`
+	LBRetries    int `json:"lbRetries"`
 }
 
 var DefaultCfg Config
@@ -60,6 +63,11 @@ func GetLocalAddr() string {
 	return addr
 }
 
+func GetPort() int {
+	port := DefaultCfg.PORT
+	return port
+}
+
 func GetMySQLAddr() string {
 	addr := os.Getenv("MYSQL_ADDRESS")
 	if addr == "" {
@@ -75,4 +83,23 @@ func GetBasePath() string {
 
 func GetFilePath(fileName string) string {
 	return path.Join(DefaultCfg.BASEDIR, "/objects/"+fileName)
+}
+
+func GetLoadBalancerConfig() (int, int) {
+	storage, retry := 0, 3
+	if DefaultCfg.LBStrategy != 0 {
+		storage = DefaultCfg.LBStrategy
+	}
+	if DefaultCfg.LBRetries != 3 {
+		retry = DefaultCfg.LBRetries
+	}
+	return storage, retry
+}
+
+func GetNodeWeight() int {
+	weight := 1
+	if DefaultCfg.Weight > 1 {
+		weight = DefaultCfg.Weight
+	}
+	return weight
 }

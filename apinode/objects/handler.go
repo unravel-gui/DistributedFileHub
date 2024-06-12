@@ -6,7 +6,7 @@ import (
 
 func Handler(path string, r *gin.Engine) {
 	router := r.Group(path)
-	router.GET("/:name", get)
-	router.PUT("/:name", put)
+	router.GET("/:hash", get)
+	router.POST("/task", post)
 	router.DELETE("/:name", del)
 }

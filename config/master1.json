@@ -1,0 +1,9 @@
+{
+  "ip": "127.0.0.1",
+  "port": 8000,
+  "weight": 1,
+  "ENDPOINT": "127.0.0.1:8000",
+  "rabbitMQAddr": "amqp://osstest:osstest@192.168.52.140:5672",
+  "mysqlAddr": "ossfile:ossfile@tcp(localhost:3306)/oss_fileMeta?charset=utf8&loc=Asia%2FShanghai&parseTime=true",
+  "basedir": "E:\\Code\\go\\src\\DisHub\\store\\test\\objects\\master"
+}

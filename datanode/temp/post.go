@@ -19,8 +19,10 @@ type tempInfo struct {
 
 func post(c *gin.Context) {
 	uuidStr := uuid.New().String()
-	name := c.Param("hash")
+	name := c.Param("uuid")
 	size := utils.GetInt64FromHeader(c, "size")
+	//
+	log.Println("temp file Size = ", size)
 	t := tempInfo{uuidStr, name, size}
 	e := t.writeToFile()
 	if e != nil {

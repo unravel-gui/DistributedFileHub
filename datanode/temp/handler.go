@@ -6,8 +6,10 @@ import (
 
 func Handler(path string, r *gin.Engine) {
 	router := r.Group(path)
-	router.POST("/:hash", post)
+	router.GET("/:uuid", get)
+	router.POST("/:uuid", post)
 	router.PUT("/:uuid", put)
 	router.PATCH("/:uuid", patch)
 	router.DELETE("/:uuid", del)
+	router.HEAD("/:uuid", head)
 }

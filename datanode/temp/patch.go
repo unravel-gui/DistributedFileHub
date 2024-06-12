@@ -41,6 +41,8 @@ func patch(c *gin.Context) {
 		return
 	}
 	actual := info.Size()
+	//
+	log.Println("current size = ", actual)
 	if actual > tempinfo.Size {
 		os.Remove(datFile)
 		os.Remove(infoFile)
